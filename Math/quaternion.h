@@ -9,7 +9,7 @@
  *           16-04-2004
  *           07-29-2011    added corrections from website
  *           22-12-2011    added correction to *= operator, thanks Steve Rogers
- *           22-10-2012    fixed ctor from euler angles & added non windows platform fixes
+ *           22-10-2012    fixed ctor from euler angles & added non windows platform fixes, thanks to Art Golf
  *   
  * Dependancies: My 4x4 matrix class
  * 
@@ -58,25 +58,6 @@ struct quaternion
 	//! from 3 euler angles
 	quaternion(float theta_z, float theta_y, float theta_x)//float heading, float attitude, float bank) 
 	{
-		/*float angle, sr, sp, sy, cr, cp, cy;
-
-		angle = bank/2;
-		sy = sinf(angle);
-		cy = cosf(angle);
-		angle = attitude/2;
-		sp = sinf(angle);
-		cp = cosf(angle);
-		angle = heading/2;
-		sr = sinf(angle);
-		cr = cosf(angle);
-
-		double crcp = cr*cp, srsp = sr*sp;
-
-		v.z = (float)( sr*cp*cy-cr*sp*sy );
-		v.y = (float)( cr*sp*cy+sr*cp*sy );
-		v.x = (float)( crcp*sy-srsp*cy );
-		s = (float)( crcp*cy+srsp*sy ); */
-
 		float cos_z_2 = cosf(0.5f*theta_z);
 		float cos_y_2 = cosf(0.5f*theta_y);
 		float cos_x_2 = cosf(0.5f*theta_x);
@@ -108,40 +89,6 @@ struct quaternion
 		v.x = cos_z_2*cos_y_2*sin_x_2 - sin_z_2*sin_y_2*cos_x_2;
 		v.y = cos_z_2*sin_y_2*cos_x_2 + sin_z_2*cos_y_2*sin_x_2;
 		v.z = sin_z_2*cos_y_2*cos_x_2 - cos_z_2*sin_y_2*sin_x_2;
-
-		/*float c1,c2,c3,s1,s2,s3;
-
-		// something strange is going on here
-		c1 = cosf(-angles.z / 2);
-		s1 = sinf(-angles.z / 2); 
-		c2 = cosf(-angles.y / 2); 
-		s2 = sinf(-angles.y / 2); 
-		c3 = cosf(angles.x / 2); 
-		s3 = sinf(angles.x / 2); 
-
-		s= c1*c2*c3 + s1*s2*s3;
-		v.x= c1*c2*s3 - s1*s2*c3;
-		v.y= c1*s2*c3 + s1*c2*s3;
-		v.z= s1*c2*c3 - c1*s2*s3;*/
-
-		/*float angle, sr, sp, sy, cr, cp, cy;
-
-		angle = angles.z/2;
-		sy = sinf(angle);
-		cy = cosf(angle);
-		angle = angles.y/2;
-		sp = sinf(angle);
-		cp = cosf(angle);
-		angle = angles.x/2;
-		sr = sinf(angle);
-		cr = cosf(angle);
-
-		double crcp = cr*cp, srsp = sr*sp;
-
-		v.z = (float)( sr*cp*cy-cr*sp*sy );
-		v.y = (float)( cr*sp*cy+sr*cp*sy );
-		v.x = (float)( crcp*sy-srsp*cy );
-		s = (float)( crcp*cy+srsp*sy ); */
 	} 
 		
 	//! basic operations
@@ -350,6 +297,37 @@ struct quaternion
 		quaternion c= slerpNoInvert(q1,q2,t),
 			       d= slerpNoInvert(a,b,t);		
 		return slerpNoInvert(c,d,2*t*(1-t));
+	}
+	
+	//! calculate inner quad point for spherical cubic interpolation 2
+	static quaternion innerQuadPoint(const quaternion &q0,const quaternion &q1,const quaternion &q2)
+	{
+		quaternion vTemp, vTemp1, vTemp2;
+		quaternion qResult;
+		
+		vTemp = q1;
+		vTemp.invert();
+		
+		vTemp1 = (vTemp * q0);
+		vTemp1 = vTemp1.log();
+
+		vTemp2 = (vTemp * q2);
+		vTemp2 = vTemp2.log();
+		
+		vTemp = (vTemp1 + vTemp2) * (-0.25f);
+		
+		qResult = q1 * vTemp.exp();
+		
+		return qResult;
+	}
+
+	//! spherical cubic interpolation alternate approach
+	//! this method is smoother than the original squad but only works when the angles are less than 90 degrees apart
+	static quaternion squad2(const quaternion &q1,const quaternion &q2,const quaternion &q3,const quaternion &q4,float t)
+	{
+		quaternion a= innerQuadPoint(q1,q2,q3),
+			       b= innerQuadPoint(q2,q3,q4);
+		return slerpNoInvert(slerpNoInvert(q2,q3,t),slerpNoInvert(a,b,t),2.0f*t*(1.0f-t));
 	}
 
 	//! Shoemake-Bezier interpolation using De Castlejau algorithm
